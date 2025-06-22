@@ -2,25 +2,37 @@ package main
 
 import (
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/driver/desktop"
 
 	"github.com/jessevdk/go-flags"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
+	a       fyne.App
+	running bool
+	latest  = "..."
+	desk    desktop.App
+	counts  map[string]map[string]int // category app count
 	// SKIP          = map[string]struct{}{"loginwindow": {}, "ScreenSaverEngine": {}}
-	SKIP         = []string{"loginwindow", "ScreenSaverEngine"}
-	WAIT         = 10
-	UPDATE_MINOR = 600
-	UPDATE_MAJOR = 3600
-	SCHEMA       = `
+	SKIP          = []string{"loginwindow", "ScreenSaverEngine"}
+	WAIT          = 10
+	MAX_TOP_ITEMS = 3
+	UPDATE_MINOR  = 600  // 600 // seconds
+	UPDATE_MAJOR  = 3600 // seconds
+	SCHEMA        = `
 		create table if not exists history (
 			occur text, -- yyyy-mm-dd
 			category text, -- day week
@@ -34,6 +46,9 @@ var (
 			count int -- in segments
 		)
 	`
+	//go:embed app-icon.png
+	systrayIcon []byte
+	appName     = "TimeTrack"
 )
 
 func initDB(db string) {
@@ -162,8 +177,15 @@ func isNewWeek(old, new time.Time) bool {
 	return new.YearDay()-int(new.Weekday()) > old.YearDay()-int(old.Weekday())
 }
 
-func notify(msg string) {
-	log.Println(msg) // TODO: Implement actual notification
+func notify(app string, duration string, major bool) {
+	latest = fmt.Sprintf("%s: %s", app, duration)
+	if major {
+		fyne.Do(func() {
+			a.SendNotification(fyne.NewNotification(app, duration))
+		})
+	}
+	updateMenu()
+	log.Println(latest)
 }
 
 func process(current string, counts map[string]map[string]int) {
@@ -174,22 +196,36 @@ func process(current string, counts map[string]map[string]int) {
 	seconds := counts["day"][current] * WAIT
 	if seconds < UPDATE_MAJOR {
 		if seconds%UPDATE_MINOR == 0 {
-			notify(fmt.Sprintf("%d minutes today: %s", seconds/60, current))
+			notify(current, fmt.Sprintf("%d minutes today", seconds/60), false)
 		}
 	} else if seconds%UPDATE_MAJOR == 0 {
-		notify(fmt.Sprintf("%d hour(s) today: %s", seconds/3600, current))
+		notify(current, fmt.Sprintf("%d hour%s today", seconds/3600, pluralise(seconds/3600)), true)
 	}
 
 	// same for week but only hours
 	seconds = counts["week"][current] * WAIT
 	if seconds >= UPDATE_MAJOR && seconds%UPDATE_MAJOR == 0 {
-		notify(fmt.Sprintf("%d hour(s) this week: %s", seconds/3600, current))
+		notify(current, fmt.Sprintf("%d hour%s this week", seconds/3600, pluralise(seconds/3600)), true)
 	}
+}
+
+func pluralise(i int) string {
+	if i == 1 {
+		return ""
+	}
+	return "s"
+}
+
+func updateMenu() {
+	fyne.Do(func() {
+		menu := makeMenu()
+		desk.SetSystemTrayMenu(menu)
+	})
 }
 
 func mainLoop(db string) {
 	log.Printf("writing to %s...", db)
-	counts := map[string]map[string]int{
+	counts = map[string]map[string]int{
 		"day":  make(map[string]int),
 		"week": make(map[string]int),
 	}
@@ -199,34 +235,45 @@ func mainLoop(db string) {
 		lastTime = time.Now()
 	}
 
+	updateMenu() // doesn't seem to work TODO
+
 	count := 0
 	for {
 		count++
 		// log.Printf("count is %d", count)
 
 		newTime := time.Now()
-		if isNewDay(lastTime, newTime) {
+		if isNewWeek(lastTime, newTime) { // both a new day and a new week
+			write("week", counts, lastTime, db)   // save
+			counts["week"] = make(map[string]int) // reset
+			write("day", counts, lastTime, db)    // save
+			counts["day"] = make(map[string]int)  // reset
+			lastTime = newTime
+		} else if isNewDay(lastTime, newTime) {
 			write("day", counts, lastTime, db)   // save
 			counts["day"] = make(map[string]int) // reset
 			lastTime = newTime
 		}
-		if isNewWeek(lastTime, newTime) {
-			write("week", counts, lastTime, db)   // save
-			counts["week"] = make(map[string]int) // reset
-			lastTime = newTime
-		}
 
-		current, _ := currentApp() // TODO handle err
+		current, err := currentApp()
+		if err != nil {
+			panic(err)
+		}
 
 		// skip if not interested
 		if !contains(SKIP, current) {
-			process(current, counts) // update counts
+			process(current, counts) // update counts, notify
 			if count%6 == 0 {        // every minute
-				save(counts, lastTime, db)
+				save(counts, lastTime, db) // save to database
+				updateMenu()
 			}
 		}
 
 		time.Sleep(time.Duration(WAIT) * time.Second)
+		if !running {
+			break
+		}
+		//log.Printf("mainLoop: continuing...")
 	}
 
 	// log.Println("done")
@@ -239,6 +286,100 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+func startGUI(db string) {
+	var ok bool
+	a = app.NewWithID("org.supernifty.timetrack")
+	if desk, ok = a.(desktop.App); ok {
+		systemTrayIcon := fyne.NewStaticResource("icon", systrayIcon)
+		desk.SetSystemTrayIcon(systemTrayIcon)
+		menu := makeMenu()
+		desk.SetSystemTrayMenu(menu)
+
+		running = true
+		go mainLoop(db)
+
+		a.Run()
+	}
+
+	running = false
+	log.Printf("gui: done")
+}
+
+func toDuration(count int) string {
+	minutes := count * WAIT / 60
+	if minutes <= 1 {
+		return "..."
+	}
+	if minutes < 60 {
+		return fmt.Sprintf("%d minutes", minutes)
+	}
+	hours := float32(count*WAIT) / float32(3600)
+	return fmt.Sprintf("%.1f hours", hours)
+}
+
+func addTopItems(category string, items []*fyne.MenuItem) []*fyne.MenuItem {
+	type kv struct {
+		Key   string
+		Value int
+	}
+
+	var ss []kv
+	for k, v := range counts[category] {
+		ss = append(ss, kv{k, v})
+	}
+
+	sort.Slice(ss, func(i, j int) bool {
+		return ss[i].Value > ss[j].Value
+	})
+
+	c := MAX_TOP_ITEMS
+	for _, kv := range ss {
+		items = append(items, fyne.NewMenuItem(fmt.Sprintf("▪ %s: %s", kv.Key, toDuration(kv.Value)), nil)) // TODO click to see app specific
+		if c == 0 {
+			break
+		}
+		c -= 1
+	}
+	return items
+}
+
+func makeMenu() *fyne.Menu {
+	// overall totals
+	daily := 0
+	for _, v := range counts["day"] {
+		daily += v
+	}
+
+	weekly := 0
+	for _, v := range counts["week"] {
+		weekly += v
+	}
+
+	items := []*fyne.MenuItem{
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem(fmt.Sprintf("Latest: %s", latest), nil),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem(fmt.Sprintf("Today: %s", toDuration(daily)), nil),
+	}
+	items = addTopItems("day", items)
+
+	items = append(items,
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem(fmt.Sprintf("This week: %s", toDuration(weekly)), nil),
+	)
+	items = addTopItems("week", items)
+
+	items = append(items,
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Quit", func() {
+			a.Quit()
+		}))
+
+	return fyne.NewMenu(
+		appName,
+		items...)
 }
 
 func dbFile() string {
@@ -273,5 +414,5 @@ func main() {
 	}
 
 	initDB(opts.DB)
-	mainLoop(opts.DB)
+	startGUI(opts.DB)
 }
