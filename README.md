@@ -7,10 +7,11 @@ I was __shocked__ to learn how much of my life I spend dealing with email. I tho
 I wanted something to keep me up to date real-time on how I was spending my day on the computer - with notifications to keep me informed if something was taking over my day.
 
 There are lots of task tracking applications out there, probably a lot more sophisticated than this one. This particular application:
+* is free.
 * is open-source.
 * runs **locally** - keep your own data private and to yourself.
-* provides a simple summary - is overall very simple
-* has notifications
+* provides a simple summary - easily get an immediate overview of your day and week.
+* has notifications.
 
 It's currently configured for my own use-case, but if other people use it, I'll add settings to suit other peoples' use-cases.
 
