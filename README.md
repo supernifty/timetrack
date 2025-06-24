@@ -15,9 +15,16 @@ There are lots of task tracking applications out there, probably a lot more soph
 
 It's currently configured for my own use-case, but if other people use it, I'll add settings to suit other peoples' use-cases.
 
+## Screenshots
+
+### Check out the status bar drop down
+
+<p>
+  <img src="assets/screenshot-1.png" alt="time tracker status bar">
+</p>
+
 ## Coming soon!
-* Screenshots
-* Graphs
+* Dashboard/Graphs
 * Option to start on boot
 
 ## Installation
