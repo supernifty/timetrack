@@ -11,7 +11,7 @@ There are lots of task tracking applications out there, probably a lot more soph
 * is open-source.
 * runs **locally** - keep your own data private and to yourself.
 * provides a simple summary - easily get an immediate overview of your day and week.
-* has notifications.
+* has notifications - keep aware of how much time you have spent on a specific application.
 
 It's currently configured for my own use-case, but if other people use it, I'll add settings to suit other peoples' use-cases.
 
