@@ -26,7 +26,7 @@ It's currently configured for my own use-case, but if other people use it, I'll 
 </p>
 
 ### Check out the summary graphs
-
+Click on Today or This Week to open them! More graphs are coming soon...
 <p>
   <img src="assets/screenshot-2.png" alt="time tracker summary graph">
 </p>
