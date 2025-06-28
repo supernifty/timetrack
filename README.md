@@ -25,14 +25,25 @@ It's currently configured for my own use-case, but if other people use it, I'll 
   <img src="assets/screenshot-1.png" alt="time tracker status bar">
 </p>
 
+### Check out the summary graphs
+
+<p>
+  <img src="assets/screenshot-2.png" alt="time tracker summary graph">
+</p>
+
+
 ## Coming soon!
-* Dashboard/Graphs
 * Option to start on boot
 
 ## Installation
 * Download the .dmg file from the releases and open.
 * Drag the application into the Applications folder.
 * Start the app.
+
+## Building a distribution
+* util/dist.sh
+* look for the dmg in the dist folder
+
 
 ## Contact
 * If you are using the app and find it beneficial, let me know! I'm peter at supernifty dot org.

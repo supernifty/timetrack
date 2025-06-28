@@ -44,6 +44,7 @@ cp assets/Info.plist dist/timetrack.app/Contents/Info.plist
 # Usage: iconutil --convert ( icns | iconset) [--output file] file [icon-name]
 iconutil --convert icns --output dist/timetrack.app/Contents/Resources/icon.icns timetrack.iconset
 cp timetrack-universal dist/timetrack.app/Contents/MacOS/timetrack
+cp -R static templates dist/timetrack.app/Contents/Resources
 
 # makes the dmg
 echo "$(date) build dmg..."

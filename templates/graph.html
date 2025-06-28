@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bar Chart</title>
+    <script src="/static/plotly.min.js"></script>
+      <style>
+    body {
+      margin: 0;
+      padding: 8px;
+      font-family: sans-serif;
+      background: #f9f9f9;
+    }
+
+    .chart-container {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .chart-box {
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      padding: 2px;
+      width: 48vw;
+      height: 60vh;
+    }
+  </style>
+</head>
+<body>
+    <div class="chart-container">
+        <div id="day" class="chart-box"></div>
+        <div id="week" class="chart-box"></div>
+    </div>
+    
+    <script>
+        const baseColors = [
+            '#66c2a5', '#fc8d62', '#8da0cb',
+            '#e78ac3', '#a6d854', '#ffd92f',
+            '#e5c494', '#b3b3b3'
+        ];
+        
+        var xData = {{ .DayLabels }};
+        var yData = {{ .DayValues }};
+        var hData = {{ .DayText }};
+        var barColors = xData.map((_, i) => baseColors[i % baseColors.length]);
+
+        var trace = {
+            x: xData,
+            y: yData,
+            type: 'bar',
+            text: hData,
+            hoverinfo: 'text',
+            marker: {
+                color: barColors
+            }
+        };
+
+        var layout = {
+            title: { text: '{{ .DayTitle }}', font: { size: 24 } },
+            xaxis: { title: {text: 'App'}, tickangle: -45 },
+            yaxis: { title: {text: 'Hours'} },
+            margin: { t: 60, l: 60, b: 100 }
+        };
+
+        Plotly.newPlot('day', [trace], layout);
+
+        xData = {{ .WeekLabels }};
+        yData = {{ .WeekValues }};
+        hData = {{ .WeekText }};
+        var barColors = xData.map((_, i) => baseColors[i % baseColors.length]);
+
+        trace = {
+            x: xData,
+            y: yData,
+            type: 'bar',
+            text: hData,
+            hoverinfo: 'text',
+            marker: {
+                color: barColors
+            }
+        };
+
+        layout = {
+            title: { text: '{{ .WeekTitle }}', font: { size: 24 } },
+            xaxis: { title: {text: 'App'}, tickangle: -45 },
+            yaxis: { title: {text: 'Hours'} },
+            margin: { t: 60, l: 60, b: 100 }
+        };
+
+        Plotly.newPlot('week', [trace], layout);
+
+    </script>
+</body>
+</html>

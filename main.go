@@ -3,8 +3,11 @@ package main
 import (
 	"database/sql"
 	_ "embed"
+	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +29,8 @@ var (
 	latest  = "..."
 	desk    desktop.App
 	counts  map[string]map[string]int // category app count
+	db      string
+
 	// SKIP          = map[string]struct{}{"loginwindow": {}, "ScreenSaverEngine": {}}
 	SKIP          = []string{"loginwindow", "ScreenSaverEngine"}
 	WAIT          = 10
@@ -43,15 +48,17 @@ var (
 		create table if not exists current (
 			category text,
 			app text,
-			count int -- in segments
+			count int -- in segments of WAIT
 		)
 	`
 	//go:embed app-icon.png
 	systrayIcon []byte
 	appName     = "TimeTrack"
+	PORT        = 4321
+	BAR_COUNT   = 8
 )
 
-func initDB(db string) {
+func initDB() {
 	log.Printf("generating schema for %s...", db)
 	con, err := sql.Open("sqlite3", db)
 	if err != nil {
@@ -288,7 +295,7 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-func startGUI(db string) {
+func startGUI() {
 	var ok bool
 	a = app.NewWithID("org.supernifty.timetrack")
 	if desk, ok = a.(desktop.App); ok {
@@ -361,13 +368,17 @@ func makeMenu() *fyne.Menu {
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem(fmt.Sprintf("Latest: %s", latest), nil),
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem(fmt.Sprintf("Today: %s", toDuration(daily)), nil),
+		fyne.NewMenuItem(fmt.Sprintf("Today: %s", toDuration(daily)), func() {
+			openBrowser(fmt.Sprintf("http://localhost:%d/chart", PORT))
+		}),
 	}
 	items = addTopItems("day", items)
 
 	items = append(items,
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem(fmt.Sprintf("This week: %s", toDuration(weekly)), nil),
+		fyne.NewMenuItem(fmt.Sprintf("This week: %s", toDuration(weekly)), func() {
+			openBrowser(fmt.Sprintf("http://localhost:%d/chart", PORT))
+		}),
 	)
 	items = addTopItems("week", items)
 
@@ -393,6 +404,109 @@ func dbFile() string {
 	return filepath.Join(appConfigDir, "timetrack.sqlite")
 }
 
+// charts
+
+func openBrowser(url string) {
+	exec.Command("open", url).Start() // macOS
+}
+
+func chartVals(rows *sql.Rows) ([]string, []float64, []string, int) {
+	var apps []string
+	var values []float64
+	var text []string
+	index := 0
+	total := 0
+	for rows.Next() {
+		var app string
+		var count int
+		rows.Scan(&app, &count)
+		hours := float64(count*WAIT) / float64(3600) // convert to hours
+		total += count
+		if index < BAR_COUNT {
+			apps = append(apps, app)
+			values = append(values, hours)
+			text = append(text, toDuration(count))
+		}
+		index++
+	}
+	return apps, values, text, total
+}
+
+// callback from web request
+func chartHandler(w http.ResponseWriter, _ *http.Request) {
+	con, err := sql.Open("sqlite3", db)
+	if err != nil {
+		log.Fatalf("failed to open database: %v", err)
+	}
+
+	rows, err := con.Query("SELECT app, count FROM current where category = 'day' order by count desc")
+	if err != nil {
+		http.Error(w, "Query error", 500)
+		return
+	}
+	defer rows.Close()
+	apps, values, text, total := chartVals(rows)
+	dayLabelsJSON, _ := json.Marshal(apps)
+	dayValuesJSON, _ := json.Marshal(values)
+	dayTextJSON, _ := json.Marshal(text)
+	dayTotal := total
+
+	rows, err = con.Query("SELECT app, count FROM current where category = 'week' order by count desc")
+	if err != nil {
+		http.Error(w, "Query error", 500)
+		return
+	}
+	defer rows.Close()
+	apps, values, text, total = chartVals(rows)
+	weekLabelsJSON, _ := json.Marshal(apps)
+	weekValuesJSON, _ := json.Marshal(values)
+	weekTextJSON, _ := json.Marshal(text)
+	weekTotal := total
+
+	path, err := getResourcePath("templates/graph.html")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tmpl := template.Must(template.ParseFiles(path))
+	tmpl.Execute(w, map[string]template.JS{
+		"DayLabels":  template.JS(dayLabelsJSON),
+		"DayValues":  template.JS(dayValuesJSON),
+		"DayText":    template.JS(dayTextJSON),
+		"DayTitle":   template.JS(fmt.Sprintf("Today: %s", toDuration(dayTotal))),
+		"WeekLabels": template.JS(weekLabelsJSON),
+		"WeekValues": template.JS(weekValuesJSON),
+		"WeekText":   template.JS(weekTextJSON),
+		"WeekTitle":  template.JS(fmt.Sprintf("This Week: %s", toDuration(weekTotal))),
+	})
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func getResourcePath(relativePath string) (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	exeRealPath, err := filepath.EvalSymlinks(exePath)
+	if err != nil {
+		return "", err
+	}
+	// From /Contents/MacOS/YourApp -> up to /Contents
+	contentsDir := filepath.Dir(filepath.Dir(exeRealPath))
+	resourcePath := filepath.Join(contentsDir, "Resources", relativePath)
+
+	// dev fallback
+	if !fileExists(resourcePath) {
+		return relativePath, nil
+	}
+
+	return resourcePath, nil
+}
+
 func main() {
 	var opts struct {
 		DB      string `long:"db" description:"db to write to" required:"false"`
@@ -413,6 +527,18 @@ func main() {
 		opts.DB = dbFile()
 	}
 
-	initDB(opts.DB)
-	startGUI(opts.DB)
+	go func() {
+		path, err := getResourcePath("static")
+		if err != nil {
+			log.Fatal(err)
+		}
+		http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(path))))
+		http.HandleFunc("/chart", chartHandler)
+		log.Printf("Serving at http://localhost:%d/ v1", PORT)
+		http.ListenAndServe(fmt.Sprintf(":%d", PORT), nil)
+	}()
+
+	db = opts.DB
+	initDB()
+	startGUI()
 }
