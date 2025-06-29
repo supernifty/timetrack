@@ -54,7 +54,7 @@ var (
 	//go:embed app-icon.png
 	systrayIcon    []byte
 	appName        = "TimeTrack"
-	PORT           = 4132
+	PORT           = 4133
 	BAR_COUNT      = 8
 	BAR_COUNT_WIDE = 28
 	MIN_HIST_MINS  = 60.0
