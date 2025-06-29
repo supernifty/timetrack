@@ -52,10 +52,12 @@ var (
 		)
 	`
 	//go:embed app-icon.png
-	systrayIcon []byte
-	appName     = "TimeTrack"
-	PORT        = 4321
-	BAR_COUNT   = 8
+	systrayIcon    []byte
+	appName        = "TimeTrack"
+	PORT           = 4132
+	BAR_COUNT      = 8
+	BAR_COUNT_WIDE = 28
+	MIN_HIST_MINS  = 60.0
 )
 
 func initDB() {
@@ -457,11 +459,144 @@ func chartHandler(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	defer rows.Close()
+
 	apps, values, text, total = chartVals(rows)
 	weekLabelsJSON, _ := json.Marshal(apps)
 	weekValuesJSON, _ := json.Marshal(values)
 	weekTextJSON, _ := json.Marshal(text)
 	weekTotal := total
+
+	// daily historical
+	today := time.Now()
+	past := today.AddDate(0, 0, -BAR_COUNT_WIDE)
+	rows, err = con.Query("SELECT occur, app, time FROM history where category = 'day' and occur >= '%s' order by time, app desc", past.Format("2006-01-02"))
+	if err != nil {
+		http.Error(w, "Query error", 500)
+		return
+	}
+	defer rows.Close()
+
+	occurs := make(map[string]bool)             // each day
+	histApps := make(map[string]bool)           // each app
+	histMins := make(map[string]map[string]int) // app -> day -> minutes
+
+	for rows.Next() {
+		var occur, histApp string
+		var minutes int
+		rows.Scan(&occur, &histApp, &minutes)
+
+		occurs[occur] = true
+		histApps[histApp] = true
+
+		if histMins[histApp] == nil {
+			histMins[histApp] = make(map[string]int)
+		}
+		histMins[histApp][occur] = minutes
+	}
+
+	var dayList []string
+	for m := range occurs {
+		dayList = append(dayList, m)
+		//dayList = append([]string{m}, dayList...)
+	}
+
+	dayhistData := make(map[string][]float64)
+
+	for p := range histApps {
+		for _, m := range dayList {
+			dayhistData[p] = append(dayhistData[p], float64(histMins[p][m])/float64(60)) // missing data = 0, app -> [val for each day]
+		}
+	}
+
+	//filteredApps := make([]string, 0)
+	filteredApps := make(map[string][]float64)
+	otherExists := false
+	for app, values := range dayhistData {
+		total := 0.0
+		for _, v := range values {
+			total += v
+		}
+		if total >= float64(MIN_HIST_MINS)/float64(60) {
+			filteredApps[app] = dayhistData[app]
+		} else {
+			if otherExists {
+				for i := 0; i < len(filteredApps["Other"]); i++ {
+					filteredApps["Other"][i] = filteredApps["Other"][i] + dayhistData[app][i]
+				}
+			} else {
+				filteredApps["Other"] = dayhistData[app]
+				otherExists = true
+			}
+		}
+	}
+
+	dayHistX, _ := json.Marshal(dayList)      // days to show
+	dayHistY, _ := json.Marshal(filteredApps) // each app -> [val for each day]
+
+	// weekly historical
+	past = today.AddDate(0, 0, -BAR_COUNT_WIDE*7)
+	rows, err = con.Query("SELECT occur, app, time FROM history where category = 'week' and occur >= '%s' order by time, app desc", past.Format("2006-01-02"))
+	if err != nil {
+		http.Error(w, "Query error", 500)
+		return
+	}
+	defer rows.Close()
+
+	occurs = make(map[string]bool)             // each day
+	histApps = make(map[string]bool)           // each app
+	histMins = make(map[string]map[string]int) // app -> day -> minutes
+
+	for rows.Next() {
+		var occur, histApp string
+		var minutes int
+		rows.Scan(&occur, &histApp, &minutes)
+
+		occurs[occur] = true
+		histApps[histApp] = true
+
+		if histMins[histApp] == nil {
+			histMins[histApp] = make(map[string]int)
+		}
+		histMins[histApp][occur] = minutes
+	}
+
+	var weekList []string
+	for m := range occurs {
+		weekList = append(weekList, m)
+	}
+
+	weekHistData := make(map[string][]float64)
+
+	for p := range histApps {
+		for _, m := range weekList {
+			weekHistData[p] = append(weekHistData[p], float64(histMins[p][m])/float64(60)) // missing data = 0, app -> [val for each day]
+		}
+	}
+
+	//filteredProducts := make([]string, 0)
+	filteredApps = make(map[string][]float64)
+	otherExists = false
+	for app, values := range weekHistData {
+		total := 0.0
+		for _, v := range values {
+			total += v
+		}
+		if total >= float64(MIN_HIST_MINS)/float64(60) {
+			filteredApps[app] = weekHistData[app]
+		} else {
+			if otherExists {
+				for i := 0; i < len(filteredApps["Other"]); i++ {
+					filteredApps["Other"][i] = filteredApps["Other"][i] + weekHistData[app][i]
+				}
+			} else {
+				filteredApps["Other"] = weekHistData[app]
+				otherExists = true
+			}
+		}
+	}
+
+	weekHistX, _ := json.Marshal(weekList)     // days to show
+	weekHistY, _ := json.Marshal(filteredApps) // each app -> [val for each day]
 
 	path, err := getResourcePath("templates/graph.html")
 	if err != nil {
@@ -478,6 +613,10 @@ func chartHandler(w http.ResponseWriter, _ *http.Request) {
 		"WeekValues": template.JS(weekValuesJSON),
 		"WeekText":   template.JS(weekTextJSON),
 		"WeekTitle":  template.JS(fmt.Sprintf("This Week: %s", toDuration(weekTotal))),
+		"DayHistX":   template.JS(dayHistX),
+		"DayHistY":   template.JS(dayHistY),
+		"WeekHistX":  template.JS(weekHistX),
+		"WeekHistY":  template.JS(weekHistY),
 	})
 }
 

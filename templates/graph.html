@@ -28,21 +28,46 @@
       width: 48vw;
       height: 60vh;
     }
+    .chart-box-wide {
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      padding: 2px;
+      width: 96vw;
+      height: 60vh;
+    }
   </style>
 </head>
 <body>
     <div class="chart-container">
         <div id="day" class="chart-box"></div>
         <div id="week" class="chart-box"></div>
+        <div id="day-hist" class="chart-box-wide"></div>
+        <div id="week-hist" class="chart-box-wide"></div>
     </div>
     
     <script>
         const baseColors = [
-            '#66c2a5', '#fc8d62', '#8da0cb',
-            '#e78ac3', '#a6d854', '#ffd92f',
-            '#e5c494', '#b3b3b3'
+            "#4E79A7", // blue
+            "#F28E2B", // orange
+            "#E15759", // red
+            "#76B7B2", // teal
+            "#59A14F", // green
+            "#EDC948", // yellow
+            "#AF7AA1", // purple
+            "#FF9DA7", // pink
+            "#9C755F", // brown
+            "#BAB0AC", // gray
+            "#86BCB6", // light teal
+            "#D37295", // rose
+            "#FABFD2", // pastel pink
+            "#B07AA1", // muted violet
+            "#D4A6C8", // lavender
+            "#8CD17D", // lime green
         ];
         
+        // today
         var xData = {{ .DayLabels }};
         var yData = {{ .DayValues }};
         var hData = {{ .DayText }};
@@ -68,6 +93,7 @@
 
         Plotly.newPlot('day', [trace], layout);
 
+        // this week
         xData = {{ .WeekLabels }};
         yData = {{ .WeekValues }};
         hData = {{ .WeekText }};
@@ -92,6 +118,53 @@
         };
 
         Plotly.newPlot('week', [trace], layout);
+
+        // historical day
+        var x = {{ .DayHistX }};
+        yData = {{ .DayHistY }};
+        traces = Object.keys(yData).map((app, idx) => {
+            return {
+                x: x,
+                y: yData[app],
+                name: app,
+                type: 'bar',
+                marker: { color: baseColors[idx % baseColors.length] },
+                hovertemplate: '%{x}<br><b>%{y:.1f} hours</b><extra>' + app + '</extra>'
+            };
+            });
+
+        layout = {
+        title: { text: 'Daily Activity' },
+        barmode: 'stack',
+        xaxis: { title: {text: 'Day'}},
+        yaxis: { title: {text: 'Hours'} },
+        legend: { orientation: 'h' }
+        };
+
+        Plotly.newPlot('day-hist', traces, layout);
+        // historical week
+        x = {{ .WeekHistX }};
+        yData = {{ .WeekHistY }};
+        traces = Object.keys(yData).map((app, idx) => {
+            return {
+                x: x,
+                y: yData[app],
+                name: app,
+                type: 'bar',
+                marker: { color: baseColors[idx % baseColors.length] },
+                hovertemplate: '%{x}<br><b>%{y:.1f} hours</b><extra>' + app + '</extra>'
+            };
+            });
+
+        layout = {
+        title: { text: 'Weekly Activity' },
+        barmode: 'stack',
+        xaxis: { title: {text: 'Week'}},
+        yaxis: { title: {text: 'Hours'} },
+        legend: { orientation: 'h' }
+        };
+
+        Plotly.newPlot('week-hist', traces, layout);
 
     </script>
 </body>
