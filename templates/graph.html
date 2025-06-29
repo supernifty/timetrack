@@ -11,18 +11,16 @@
       padding: 8px;
       background-color: #f9f9f9;
     }
-    h1 {
-      font-size: 2em;
+    .footer {
       margin-bottom: 10px;
-      color: #4E79A7;
+      padding: 8px;
+      /*color: #4E79A7;*/
     }
-    .header {
+    .footer-block {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 2px solid #ccc;
-      margin-bottom: 30px;
-      padding-bottom: 10px;
+      padding: 8px;
     }
     .title-block {
       display: flex;
@@ -50,8 +48,8 @@
       border: 1px solid #ccc;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-      padding: 2px;
-      width: 48vw;
+      padding: 1px;
+      width: 49vw;
       height: 60vh;
     }
     .chart-box-wide {
@@ -59,16 +57,24 @@
       border: 1px solid #ccc;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-      padding: 2px;
-      width: 96vw;
+      padding: 1px;
+      width: 99vw;
       height: 60vh;
     }
   </style>
 </head>
 <body>
-    <div class="header">
+
+    <div class="chart-container">
+        <div id="day" class="chart-box"></div>
+        <div id="week" class="chart-box"></div>
+        <div id="day-hist" class="chart-box-wide"></div>
+        <div id="week-hist" class="chart-box-wide"></div>
+    </div>
+
+        <div class="footer-block">
         <div class="title-block">
-            <h1>TimeTrack</h1>
+            <span class="footer">TimeTrack - by Supernifty</span>
         </div>
         <a class="github-link" href="https://github.com/supernifty/timetrack" target="_blank">
             <svg height="20" width="20" viewBox="0 0 16 16" fill="#4E79A7" style="vertical-align: middle; margin-right: 5px;">
@@ -89,12 +95,6 @@
             </a>
     </div>
 
-    <div class="chart-container">
-        <div id="day" class="chart-box"></div>
-        <div id="week" class="chart-box"></div>
-        <div id="day-hist" class="chart-box-wide"></div>
-        <div id="week-hist" class="chart-box-wide"></div>
-    </div>
     
     <script>
         const baseColors = [
