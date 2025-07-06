@@ -368,7 +368,7 @@ func makeMenu() *fyne.Menu {
 
 	items := []*fyne.MenuItem{
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem(fmt.Sprintf("Latest: %s", latest), nil),
+		fyne.NewMenuItem(fmt.Sprintf("Last update: %s", latest), nil),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem(fmt.Sprintf("Today: %s", toDuration(daily)), func() {
 			openBrowser(fmt.Sprintf("http://localhost:%d/chart", PORT))
