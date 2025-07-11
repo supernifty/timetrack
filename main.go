@@ -345,7 +345,9 @@ func addTopItems(category string, items []*fyne.MenuItem) []*fyne.MenuItem {
 
 	c := MAX_TOP_ITEMS
 	for _, kv := range ss {
-		items = append(items, fyne.NewMenuItem(fmt.Sprintf("▪ %s: %s", kv.Key, toDuration(kv.Value)), nil)) // TODO click to see app specific
+		items = append(items, fyne.NewMenuItem(fmt.Sprintf("▪ %s: %s", kv.Key, toDuration(kv.Value)), func() {
+			openBrowser(fmt.Sprintf("http://localhost:%d/chart", PORT))
+		})) // TODO click to see app specific
 		if c == 0 {
 			break
 		}
@@ -368,7 +370,9 @@ func makeMenu() *fyne.Menu {
 
 	items := []*fyne.MenuItem{
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem(fmt.Sprintf("Last update: %s", latest), nil),
+		fyne.NewMenuItem(fmt.Sprintf("Last update: %s", latest), func() {
+			openBrowser(fmt.Sprintf("http://localhost:%d/chart", PORT))
+		}),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem(fmt.Sprintf("Today: %s", toDuration(daily)), func() {
 			openBrowser(fmt.Sprintf("http://localhost:%d/chart", PORT))
